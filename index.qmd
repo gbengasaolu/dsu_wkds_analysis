@@ -1,0 +1,381 @@
+---
+title: "U.S. Mortality Surveillance Dashboard, 2023"
+author: Olugbenga Asaolu  
+format: dashboard 
+Theme: Cosmo
+---
+
+::: {.hidden}
+
+```{python}
+#| echo: false
+#| message: false
+#| warning: false
+```
+
+```{python}
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import itables 
+import nbformat
+from nbclient import NotebookClient
+```
+
+``` {python}
+wkds=pd.read_csv ("data/Weekly_Provisional_Counts_of_Deaths_by_State_and_Select_Causes__2020-2023_20250202.csv")
+wkds.head (20)
+wkds.tail (100)
+
+#Clean column names
+clean_names = wkds.columns.str.replace(r'[^a-zA-Z0-9]', '_', regex=True)
+wkds.columns = clean_names
+
+wkds = wkds[wkds['Jurisdiction_of_Occurrence'] != 'United States']
+```
+
+
+
+```{python}
+#Clean column names
+clean_names = wkds.columns.str.replace(r'[^a-zA-Z0-9]', '_', regex=True)
+wkds.columns = clean_names
+
+#Create a subset
+wkds_2023 = wkds[wkds['MMWR_Year'] == 2023]
+
+
+wkds_2023 = wkds_2023[wkds_2023['Jurisdiction_of_Occurrence'] != 'United States']
+
+# Compute highest All Cause
+highest_row = wkds_2023.sort_values("All_Cause", ascending=False).head(1).squeeze()
+highest_all_cause_juristiction = highest_row["Jurisdiction_of_Occurrence"]
+highest_all_cause_value = round(highest_row["All_Cause"], 1)
+
+# Compute highest Natural_Cause
+highest_row = wkds_2023.sort_values("Natural_Cause", ascending=False).head(1).squeeze()
+highest_natural_cause_juristiction = highest_row["Jurisdiction_of_Occurrence"]
+highest_natural_cause_value = round(highest_row["Natural_Cause"], 1)
+
+# Compute highest Septicemia
+highest_row = wkds_2023.sort_values("Septicemia__A40_A41_", ascending=False).head(1).squeeze()
+highest_septicemia_juristiction = highest_row["Jurisdiction_of_Occurrence"]
+highest_septicemia_value = round(highest_row["Septicemia__A40_A41_"], 1)
+
+# Compute highest Malignant neoplasms
+highest_row = wkds_2023.sort_values("Malignant_neoplasms__C00_C97_", ascending=False).head(1).squeeze()
+highest_malignant_neoplasms_juristiction = highest_row["Jurisdiction_of_Occurrence"]
+highest_malignant_neoplasms_value = round(highest_row["Malignant_neoplasms__C00_C97_"], 1)
+
+# Compute highest Diabetes_mellitus__E10_E14_
+highest_row = wkds_2023.sort_values("Diabetes_mellitus__E10_E14_", ascending=False).head(1).squeeze()
+highest_diabetes_mellitus_juristiction = highest_row["Jurisdiction_of_Occurrence"]
+highest_diabetes_mellitus_value = round(highest_row["Diabetes_mellitus__E10_E14_"], 1)
+```
+
+
+```{python}
+import pandas as pd
+
+# Define region mapping
+state_to_region = {
+    # Northeast
+    "Connecticut": "Northeast", "Maine": "Northeast", "Massachusetts": "Northeast",
+    "New Hampshire": "Northeast", "New Jersey": "Northeast", "New York": "Northeast",
+    "Pennsylvania": "Northeast", "Rhode Island": "Northeast", "Vermont": "Northeast",
+
+    # Midwest
+    "Illinois": "Midwest", "Indiana": "Midwest", "Iowa": "Midwest",
+    "Kansas": "Midwest", "Michigan": "Midwest", "Minnesota": "Midwest",
+    "Missouri": "Midwest", "Nebraska": "Midwest", "North Dakota": "Midwest",
+    "Ohio": "Midwest", "South Dakota": "Midwest", "Wisconsin": "Midwest",
+
+    # South
+    "Alabama": "South", "Arkansas": "South", "Delaware": "South",
+    "District of Columbia": "South", "Florida": "South", "Georgia": "South",
+    "Kentucky": "South", "Louisiana": "South", "Maryland": "South",
+    "Mississippi": "South", "North Carolina": "South", "Oklahoma": "South",
+    "South Carolina": "South", "Tennessee": "South", "Texas": "South",
+    "Virginia": "South", "West Virginia": "South",
+
+    # West
+    "Alaska": "West", "Arizona": "West", "California": "West", "Colorado": "West",
+    "Hawaii": "West", "Idaho": "West", "Montana": "West", "Nevada": "West",
+    "New Mexico": "West", "Oregon": "West", "Utah": "West", "Washington": "West",
+    "Wyoming": "West"
+}
+
+# Create DataFrame
+StateRegion = pd.DataFrame({
+    'State': list(state_to_region.keys())
+})
+StateRegion['Region'] = StateRegion['State'].map(state_to_region)
+
+StateRegion
+
+```
+
+```{python}
+# wkds_2023
+wkds_juries = set(wkds_2023['Jurisdiction_of_Occurrence'].unique())
+sr_juries = set(StateRegion ['State'].unique())
+
+missing_juries=sr_juries - wkds_juries
+missing_juries
+
+wkds_2023=pd.merge(wkds_2023, StateRegion, left_on='Jurisdiction_of_Occurrence', right_on='State')
+wkds_2023
+```
+
+```{python}
+# wkds
+wkds_jurisdictions = set(wkds['Jurisdiction_of_Occurrence'].unique())
+sr_jurisdictions = set(StateRegion ['State'].unique())
+
+missing_jurisdictions=sr_jurisdictions - wkds_jurisdictions
+missing_jurisdictions
+
+wkds=pd.merge(wkds, StateRegion, left_on='Jurisdiction_of_Occurrence', right_on='State')
+wkds
+```
+
+```{python}
+wkds=pd.merge(wkds, StateRegion, left_on='Jurisdiction_of_Occurrence', right_on='State')
+wkds
+```
+
+```{python}
+# Largest 20 countries by Life Expectancy (bar chart) with a blue color scale
+# Group by 'Jurisdiction_of_Occurrence' and sum 'All_Cause' deaths
+jurisdiction_deaths = wkds_2023.groupby('Jurisdiction_of_Occurrence')['All_Cause'].sum().reset_index()
+
+# Sort by 'All_Cause' deaths in descending order
+jurisdiction_deaths_sorted = jurisdiction_deaths.sort_values(by='All_Cause', ascending=False)
+
+# Get the top 20 jurisdictions
+top_20= jurisdiction_deaths_sorted.head(20)
+
+
+bar_fig = px.bar(
+    top_20,
+    x="All_Cause",
+    y="Jurisdiction_of_Occurrence",
+    title="Top 20 Jurisdictions Ranked by Total All-Cause Deaths",
+    color="All_Cause",
+    color_continuous_scale="Blues",
+    labels={"All_Cause":"All Cause",
+            "Jurisdiction_of_Occurrence": "Jurisdiction of Occurrence"}
+).update_layout(coloraxis_showscale=False)
+
+bar_fig
+```
+
+
+
+:::
+
+# HOME
+
+## Row 1 {height=20%}
+
+
+:::{.valuebox icon="exclamation-triangle" color="#1E90FF" title="Highest All Cause"}
+
+`{python} str(highest_all_cause_value)`
+
+`{python} highest_all_cause_juristiction`
+:::
+
+
+
+
+:::{.valuebox icon="bullseye" color="#1583B3" title="Highest Natural Cause"}
+
+`{python} str(highest_natural_cause_value)`
+
+`{python} highest_natural_cause_juristiction`
+:::
+
+
+
+
+:::{.valuebox icon="hurricane" color="#C7CEEFF" title="Highest Septicemia"} 
+
+`{python} str(highest_septicemia_value)`
+
+`{python} highest_septicemia_juristiction`
+:::
+
+
+:::{.valuebox icon="layers" color="#FF871E" title="Highest Malignant Neoplasms"} 
+
+`{python} str(highest_malignant_neoplasms_value)`
+
+`{python} highest_malignant_neoplasms_juristiction`
+:::
+
+
+
+:::{.valuebox icon="lightbulb" color="#B35F15" title="Highest Diabetes Mellitus"} 
+
+`{python} str(highest_diabetes_mellitus_value)`
+
+`{python} highest_diabetes_mellitus_juristiction`
+:::
+
+
+## Row 2 {height=80%}
+
+### {width=55%}
+
+
+```{python}
+#| echo: false
+#| output: true
+
+import pandas as pd
+import plotly.express as px
+
+# Ensure date column is properly formatted
+wkds_2023['Week_Ending_Date'] = pd.to_datetime(wkds_2023['Week_Ending_Date'], errors='coerce')
+
+# Define target jurisdictions
+selected_jurisdictions = [
+    "California", "Florida", "Texas",
+    "Massachusetts", "Wisconsin", "South Carolina"
+]
+
+# Filter the dataset
+filtered_df = wkds_2023[wkds_2023['Jurisdiction_of_Occurrence'].isin(selected_jurisdictions)]
+
+# Create line chart
+fig = px.line(
+    filtered_df,
+    x='Week_Ending_Date',
+    y='All_Cause',
+    color='Jurisdiction_of_Occurrence',
+    title='All-Cause Deaths Over Time (Selected Jurisdictions)',
+    labels={
+        'All_Cause': 'All-Cause Deaths',
+        'Week_Ending_Date': 'Week Ending Date',
+        'Jurisdiction_of_Occurrence': 'Jurisdiction'
+    },
+    markers=True
+)
+
+# Update layout for styling
+fig.update_layout(
+    legend=dict(
+        orientation='h',
+        x=0.5,
+        y=-0.2,
+        xanchor='center',
+        yanchor='top',
+        title=dict(text='Jurisdiction', font=dict(size=10)),
+        font=dict(family='Arial', size=10, color='black'),
+        bgcolor='rgba(0,0,0,0)',  # transparent
+    ),
+)
+```
+
+
+
+### {width=45%}
+
+```{python}
+bar_fig
+```
+
+
+# REGIONAL
+
+```{python}
+# Create regional summary
+reg_sum = (
+    wkds_2023.groupby("Region")
+    .apply(
+        lambda g: pd.Series(
+            {
+                "Average Number of All-Cause Deaths": g["All_Cause"].mean(),
+                "Lowest Number of All-Cause Deaths": g["All_Cause"].min(),
+                "State with Lowest Deaths": g.loc[g["All_Cause"].idxmin(), "Jurisdiction_of_Occurrence"],
+                "Highest All-Cause Deaths": g["All_Cause"].max(),
+                "State with Highest All Cause Deaths": g.loc[
+                    g["All_Cause"].idxmax(), "Jurisdiction_of_Occurrence"
+                ],
+            }
+        )
+    )
+    .round(2)
+)
+
+itables.show(reg_sum)
+```
+
+
+```{python}
+# Summarize diabetes mortality by region
+reg_sum_diab2 = (
+    wkds_2023.groupby("Region")
+    .apply(
+        lambda g: pd.Series({
+            "Average Diabetes Deaths": g["Diabetes_mellitus__E10_E14_"].mean(),
+            "Lowest Diabetes Deaths": g["Diabetes_mellitus__E10_E14_"].min(),
+            "State with Lowest Deaths": g.loc[
+                g["Diabetes_mellitus__E10_E14_"].idxmin(), "Jurisdiction_of_Occurrence"
+            ],
+            "Highest Diabetes Deaths": g["Diabetes_mellitus__E10_E14_"].max(),
+            "State with Highest Deaths": g.loc[
+                g["Diabetes_mellitus__E10_E14_"].idxmax(), "Jurisdiction_of_Occurrence"
+            ],
+        })
+    )
+    .round(2)
+)
+
+itables.show(reg_sum_diab2)
+```
+
+# DATA DOWNLOAD
+
+```{python}
+# Display full dataset with itables
+itables.show(wkds_2023, caption="Weekly Counts of Deaths by State and Select Causes in 2023", buttons=["csvHtml5"])
+```
+
+
+# ABOUT
+
+This interactive dashboard provides a visual exploration of weekly provisional death counts from 2020 to 2023, sourced from the National Center for Health Statistics (NCHS). It allows you to analyze mortality trends across the United States and Puerto Rico, focusing on select underlying causes of death, including COVID-19 (ICD-10 code U07.1).
+
+**Key Features:**
+
+Time Series Analysis: Track weekly death counts over time, identifying trends and potential spikes.
+
+Geographic Comparison: Compare mortality rates and counts across different U.S. states and Puerto Rico.
+
+Cause-Specific Insights: Examine mortality patterns for various underlying causes of death.
+
+COVID-19 Data: Visualize the impact of COVID-19 on weekly death counts.
+
+
+**Important Notes:**
+
+Data Lag: Please be aware that death counts are presented with a one-week lag.
+Data Updates: This dataset will no longer be updated after September 27, 2023. For continued access to similar data, please visit wonder.cdc.gov.
+
+Data Quality: Refer to the data dictionary for detailed information on data quality and limitations.
+
+**Data Source and Citation:**
+
+Source: National Center for Health Statistics.
+Suggested Citation: National Center for Health Statistics. Weekly Provisional Counts of Deaths by State and Select Causes, 2020-2023. Date accessed [Last accessed date]. Available from https://data.cdc.gov/d/muzy-jte6.
+
+**Geographic Coverage:**
+
+United States, Puerto Rico.
+
+**Data Dictionary:**
+
+For detailed information on the data fields, please refer to the Data Dictionary. ![] (https://data.cdc.gov/NCHS/Weekly-Provisional-Counts-of-Deaths-by-State-and-S/muzy-jte6/about_data)
+This dashboard is designed to provide valuable insights into mortality trends during a critical period. We encourage you to explore the data and utilize the interactive features to gain a deeper understanding of the information.
